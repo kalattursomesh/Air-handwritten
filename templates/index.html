@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Air Writing AI — Live Trainable Recognition</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-left">
+            <div class="logo-icon">✍️</div>
+            <div>
+                <h1>AIR WRITING AI</h1>
+                <p class="subtitle">Live Camera + Trainable Recognition</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="mode-toggle">
+                <button id="btn-train-mode" class="mode-btn active" onclick="switchMode('train')">🧠 Train</button>
+                <button id="btn-predict-mode" class="mode-btn" onclick="switchMode('predict')">🔍 Predict</button>
+                <button id="btn-draw-mode" class="mode-btn" onclick="switchMode('draw')">🖊️ Draw</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <section class="canvas-section">
+            <div class="canvas-header">
+                <h2 id="canvas-title">Air Writing — Point Index Finger to Draw</h2>
+                <div class="canvas-tools">
+                    <button class="tool-btn" onclick="clearCanvas()" title="Clear">🗑️ Clear</button>
+                    <button class="tool-btn" onclick="undoStroke()" title="Undo">↩️ Undo</button>
+                    <div class="brush-control">
+                        <label>Brush</label>
+                        <input type="range" id="brush-size" min="4" max="30" value="10" oninput="brushSize=parseInt(this.value)">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Video + Drawing Canvas stacked -->
+            <div class="canvas-wrapper" id="canvas-area">
+                <video id="webcam" autoplay playsinline style="display:none;"></video>
+                <canvas id="video-canvas" width="640" height="480"></canvas>
+                <canvas id="drawing-canvas" width="640" height="480"></canvas>
+                <div id="status-indicator" class="live-status">IDLE</div>
+                <div id="camera-off-msg" class="camera-msg">
+                    <p>📷 Click <strong>Start Camera</strong> to begin air writing</p>
+                    <button class="primary-btn" onclick="startCamera()">📷 Start Camera</button>
+                </div>
+            </div>
+
+            <!-- Controls Row -->
+            <div class="action-row">
+                <button class="tool-btn" id="cam-toggle" onclick="toggleCamera()">📷 Start Camera</button>
+                <select id="camera-select" class="tool-btn" style="max-width: 150px;" onchange="changeCamera()">
+                    <option value="">Default Camera</option>
+                </select>
+
+                <div id="train-controls" class="inline-controls">
+                    <div class="label-input-group">
+                        <label>Label:</label>
+                        <input type="text" id="char-label" maxlength="5" placeholder="A, B, 1...">
+                    </div>
+                    <button class="primary-btn" onclick="saveSample()">💾 Save</button>
+                    <button class="accent-btn" onclick="trainModel()">🚀 Train</button>
+                </div>
+
+                <div id="predict-controls" class="inline-controls" style="display:none;">
+                    <button class="primary-btn" onclick="predictDrawing()">🔮 Recognize</button>
+                </div>
+
+                <div id="draw-controls" class="inline-controls" style="display:none;">
+                    <div class="label-input-group">
+                        <label>Label:</label>
+                        <input type="text" id="char-label-draw" maxlength="5" placeholder="A, B...">
+                    </div>
+                    <button class="primary-btn" onclick="saveSampleDraw()">💾 Save</button>
+                    <button class="accent-btn" onclick="predictDraw()">🔮 Recognize</button>
+                </div>
+            </div>
+        </section>
+
+        <aside class="info-panel">
+            <!-- Prediction -->
+            <div id="prediction-card" class="card prediction-card">
+                <h3>Recognition Result</h3>
+                <div class="prediction-result">
+                    <span id="pred-char" class="pred-char">?</span>
+                    <span id="pred-conf" class="pred-conf">—</span>
+                </div>
+                <div id="pred-top3" class="pred-top3"></div>
+            </div>
+
+            <!-- Gesture Guide -->
+            <div class="card">
+                <h3>Gestures</h3>
+                <div class="instructions">
+                    <div class="step"><span class="step-num">☝️</span><p><strong>Index finger only</strong> → Draw</p></div>
+                    <div class="step"><span class="step-num">✌️</span><p><strong>Two fingers</strong> → Pause / Hover</p></div>
+                    <div class="step"><span class="step-num">🖐️</span><p><strong>Open palm</strong> → Clear canvas</p></div>
+                    <div class="step"><span class="step-num">✊</span><p><strong>Fist</strong> → Stop drawing</p></div>
+                </div>
+            </div>
+
+            <!-- Status -->
+            <div class="card status-card">
+                <h3>System Status</h3>
+                <div class="status-row"><span>Camera</span><span id="s-camera" class="status-value">OFF</span></div>
+                <div class="status-row"><span>Mode</span><span id="s-mode" class="status-value mode-train">TRAIN</span></div>
+                <div class="status-row"><span>Model</span><span id="s-model" class="status-value">Not Trained</span></div>
+                <div class="status-row"><span>Samples</span><span id="s-samples" class="status-value">0</span></div>
+                <div class="status-row"><span>Classes</span><span id="s-classes" class="status-value">0</span></div>
+            </div>
+
+            <!-- Training Stats -->
+            <div class="card">
+                <h3>Training Data</h3>
+                <div id="stats-container" class="stats-container">
+                    <p class="empty-state">No samples yet.</p>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <div id="toast" class="toast"></div>
+    <div id="training-overlay" class="overlay" style="display:none;">
+        <div class="overlay-content">
+            <div class="spinner"></div>
+            <h2>Training Model...</h2>
+            <p>Teaching the AI your handwriting</p>
+        </div>
+    </div>
+
+    <!-- MediaPipe Hands (runs in browser — no server needed) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+    <script>
+    // ============================================================
+    // GLOBALS
+    // ============================================================
+    const videoEl = document.getElementById('webcam');
+    const vidCanvas = document.getElementById('video-canvas');
+    const drawCanvas = document.getElementById('drawing-canvas');
+    const vidCtx = vidCanvas.getContext('2d');
+    const drawCtx = drawCanvas.getContext('2d');
+
+    let brushSize = 10;
+    let cameraActive = false;
+    let mpCamera = null;
+    let currentMode = 'train';
+    let isDrawingStroke = false;
+    let prevX = 0, prevY = 0;
+    let strokes = [];  // for undo
+    let currentStrokePoints = [];
+
+    // Init drawing canvas
+    drawCtx.lineCap = 'round';
+    drawCtx.lineJoin = 'round';
+    clearCanvas();
+
+    // ============================================================
+    // MEDIAPIPE HANDS (browser-side, no Python!)
+    // ============================================================
+    const hands = new Hands({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 0,  // 0 = lite (fastest)
+        minDetectionConfidence: 0.6,
+        minTrackingConfidence: 0.5
+    });
+
+    hands.onResults(onHandResults);
+
+    function onHandResults(results) {
+        // Draw video frame mirrored (flip horizontally)
+        vidCtx.save();
+        vidCtx.clearRect(0, 0, vidCanvas.width, vidCanvas.height);
+        vidCtx.translate(vidCanvas.width, 0);
+        vidCtx.scale(-1, 1);
+        vidCtx.drawImage(results.image, 0, 0, vidCanvas.width, vidCanvas.height);
+
+        const statusEl = document.getElementById('status-indicator');
+
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            const landmarks = results.multiHandLandmarks[0];
+
+            // Draw hand skeleton on mirrored video canvas
+            drawConnectors(vidCtx, landmarks, HAND_CONNECTIONS, {color: '#00ffcc', lineWidth: 2});
+            drawLandmarks(vidCtx, landmarks, {color: '#ff00ff', lineWidth: 1, radius: 3});
+            
+            // Restore context AFTER drawing skeletons so text/other things don't get flipped
+            vidCtx.restore();
+
+            // Get finger states
+            const fingers = getFingersUp(landmarks);
+            const totalUp = fingers.reduce((a, b) => a + b, 0);
+
+            // Index fingertip position (landmark 8)
+            const tipX = landmarks[8].x * drawCanvas.width;
+            const tipY = landmarks[8].y * drawCanvas.height;
+            // Mirror X for natural feel
+            const mx = drawCanvas.width - tipX;
+
+            // --- CLEAR (all 5 up) ---
+            if (totalUp === 5) {
+                clearCanvas();
+                isDrawingStroke = false;
+                prevX = 0; prevY = 0;
+                statusEl.textContent = 'CLEARING';
+                statusEl.className = 'live-status clearing';
+            }
+            // --- CONTINUE ACTIVE STROKE (unconditional) ---
+            else if (isDrawingStroke && totalUp < 5) {
+                drawCtx.strokeStyle = '#00ffff';
+                drawCtx.lineWidth = brushSize;
+                drawCtx.beginPath();
+                drawCtx.moveTo(prevX, prevY);
+                drawCtx.lineTo(mx, tipY);
+                drawCtx.stroke();
+                prevX = mx;
+                prevY = tipY;
+                currentStrokePoints.push({x: mx, y: tipY});
+                statusEl.textContent = 'WRITING';
+                statusEl.className = 'live-status writing';
+            }
+            // --- START NEW STROKE (index up, middle+ring down) ---
+            else if (!isDrawingStroke && fingers[1] && !fingers[2] && !fingers[3]) {
+                isDrawingStroke = true;
+                prevX = mx;
+                prevY = tipY;
+                currentStrokePoints = [{x: mx, y: tipY}];
+                statusEl.textContent = 'WRITING';
+                statusEl.className = 'live-status writing';
+            }
+            // --- HOVER (2 fingers) ---
+            else if (fingers[1] && fingers[2] && !fingers[3]) {
+                if (currentStrokePoints.length > 0) {
+                    strokes.push([...currentStrokePoints]);
+                    currentStrokePoints = [];
+                }
+                isDrawingStroke = false;
+                prevX = 0; prevY = 0;
+                // Draw hover cursor on video
+                vidCtx.beginPath();
+                vidCtx.arc(drawCanvas.width - tipX, tipY, 12, 0, Math.PI * 2);
+                vidCtx.strokeStyle = '#00ffff';
+                vidCtx.lineWidth = 2;
+                vidCtx.stroke();
+                statusEl.textContent = 'HOVERING';
+                statusEl.className = 'live-status hovering';
+            }
+            // FIST / OTHER
+            else {
+                if (currentStrokePoints.length > 0) {
+                    strokes.push([...currentStrokePoints]);
+                    currentStrokePoints = [];
+                }
+                isDrawingStroke = false;
+                prevX = 0; prevY = 0;
+                statusEl.textContent = 'IDLE';
+                statusEl.className = 'live-status';
+            }
+        } else {
+            // Restore context if no hands were detected
+            vidCtx.restore();
+            
+            // No hand detected
+            if (currentStrokePoints.length > 0) {
+                strokes.push([...currentStrokePoints]);
+                currentStrokePoints = [];
+            }
+            isDrawingStroke = false;
+            prevX = 0; prevY = 0;
+            statusEl.textContent = 'NO HAND';
+            statusEl.className = 'live-status';
+        }
+    }
+
+    function getFingersUp(lm) {
+        // Returns [thumb, index, middle, ring, pinky] (1=up, 0=down)
+        const fingers = [];
+
+        // Thumb: compare x of tip(4) vs ip(3) — assumes right hand mirrored
+        fingers.push(lm[4].x < lm[3].x ? 1 : 0);
+
+        // Other 4 fingers: tip.y < pip.y means extended
+        const tips = [8, 12, 16, 20];
+        const pips = [6, 10, 14, 18];
+        for (let i = 0; i < 4; i++) {
+            fingers.push(lm[tips[i]].y < lm[pips[i]].y ? 1 : 0);
+        }
+        return fingers;
+    }
+
+    // ============================================================
+    // CAMERA CONTROL
+    // ============================================================
+    let currentStream = null;
+
+    async function populateCameras() {
+        try {
+            await navigator.mediaDevices.getUserMedia({video: true}); // request permission first
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(d => d.kind === 'videoinput');
+            const select = document.getElementById('camera-select');
+            select.innerHTML = '';
+            videoDevices.forEach((device, index) => {
+                const opt = document.createElement('option');
+                opt.value = device.deviceId;
+                opt.text = device.label || `Camera ${index + 1}`;
+                select.appendChild(opt);
+            });
+        } catch (e) {
+            console.error("Camera permission denied or device error:", e);
+        }
+    }
+
+    // Call this once to load camera list
+    populateCameras();
+
+    async function startCamera() {
+        document.getElementById('camera-off-msg').style.display = 'none';
+        cameraActive = true;
+        document.getElementById('s-camera').textContent = 'STARTING...';
+        document.getElementById('cam-toggle').textContent = '🔴 Stop Camera';
+
+        const deviceId = document.getElementById('camera-select').value;
+        const constraints = {
+            video: deviceId ? { deviceId: { exact: deviceId }, width: 640, height: 480 } : { width: 640, height: 480 }
+        };
+
+        try {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+            videoEl.srcObject = currentStream;
+            videoEl.play();
+
+            document.getElementById('s-camera').textContent = 'ON';
+            document.getElementById('s-camera').style.color = '#10b981';
+
+            // Custom loop to send frames to MediaPipe
+            const sendFrame = async () => {
+                if (!cameraActive) return;
+                await hands.send({ image: videoEl });
+                requestAnimationFrame(sendFrame);
+            };
+            videoEl.onloadeddata = () => sendFrame();
+
+        } catch (err) {
+            console.error(err);
+            showToast(`Camera error: ${err.name} - ${err.message}`, 'error');
+            stopCamera();
+        }
+    }
+
+    function stopCamera() {
+        cameraActive = false;
+        if (currentStream) {
+            currentStream.getTracks().forEach(track => track.stop());
+            currentStream = null;
+        }
+        document.getElementById('s-camera').textContent = 'OFF';
+        document.getElementById('s-camera').style.color = '';
+        document.getElementById('cam-toggle').textContent = '📷 Start Camera';
+        document.getElementById('camera-off-msg').style.display = 'flex';
+        vidCtx.clearRect(0, 0, vidCanvas.width, vidCanvas.height);
+    }
+
+    function toggleCamera() {
+        cameraActive ? stopCamera() : startCamera();
+    }
+
+    function changeCamera() {
+        if (cameraActive) {
+            startCamera(); // Restart with new device
+        }
+    }
+
+    // ============================================================
+    // CANVAS HELPERS
+    // ============================================================
+    function clearCanvas() {
+        drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        strokes = [];
+        currentStrokePoints = [];
+        isDrawingStroke = false;
+        prevX = 0; prevY = 0;
+    }
+
+    function undoStroke() {
+        if (strokes.length === 0) return;
+        strokes.pop();
+        drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        drawCtx.strokeStyle = '#00ffff';
+        drawCtx.lineWidth = brushSize;
+        for (const stroke of strokes) {
+            if (stroke.length < 2) continue;
+            drawCtx.beginPath();
+            drawCtx.moveTo(stroke[0].x, stroke[0].y);
+            for (let i = 1; i < stroke.length; i++) {
+                drawCtx.lineTo(stroke[i].x, stroke[i].y);
+            }
+            drawCtx.stroke();
+        }
+    }
+
+    function getDrawingImage() {
+        // Create a temp canvas with black bg + white strokes for OCR
+        const tmp = document.createElement('canvas');
+        tmp.width = drawCanvas.width;
+        tmp.height = drawCanvas.height;
+        const tCtx = tmp.getContext('2d');
+        tCtx.fillStyle = '#000000';
+        tCtx.fillRect(0, 0, tmp.width, tmp.height);
+        tCtx.drawImage(drawCanvas, 0, 0);
+        return tmp.toDataURL('image/png');
+    }
+
+    // ============================================================
+    // DRAW MODE (mouse drawing when camera is off)
+    // ============================================================
+    let mouseDrawing = false;
+    drawCanvas.addEventListener('mousedown', (e) => {
+        if (currentMode !== 'draw') return;
+        mouseDrawing = true;
+        const rect = drawCanvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * (drawCanvas.width / rect.width);
+        const y = (e.clientY - rect.top) * (drawCanvas.height / rect.height);
+        drawCtx.strokeStyle = '#00ffff';
+        drawCtx.lineWidth = brushSize;
+        drawCtx.beginPath();
+        drawCtx.moveTo(x, y);
+        currentStrokePoints = [{x, y}];
+    });
+    drawCanvas.addEventListener('mousemove', (e) => {
+        if (!mouseDrawing || currentMode !== 'draw') return;
+        const rect = drawCanvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * (drawCanvas.width / rect.width);
+        const y = (e.clientY - rect.top) * (drawCanvas.height / rect.height);
+        drawCtx.lineTo(x, y);
+        drawCtx.stroke();
+        currentStrokePoints.push({x, y});
+    });
+    drawCanvas.addEventListener('mouseup', () => {
+        if (mouseDrawing && currentStrokePoints.length > 0) {
+            strokes.push([...currentStrokePoints]);
+            currentStrokePoints = [];
+        }
+        mouseDrawing = false;
+    });
+    drawCanvas.addEventListener('mouseleave', () => { mouseDrawing = false; });
+
+    // ============================================================
+    // MODE SWITCHING
+    // ============================================================
+    function switchMode(mode) {
+        currentMode = mode;
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`btn-${mode}-mode`).classList.add('active');
+        document.getElementById('train-controls').style.display = mode === 'train' ? 'flex' : 'none';
+        document.getElementById('predict-controls').style.display = mode === 'predict' ? 'flex' : 'none';
+        document.getElementById('draw-controls').style.display = mode === 'draw' ? 'flex' : 'none';
+        document.getElementById('s-mode').textContent = mode.toUpperCase();
+        clearCanvas();
+    }
+
+    // ============================================================
+    // API CALLS
+    // ============================================================
+    async function saveSample() {
+        const label = document.getElementById('char-label').value.trim().toUpperCase();
+        if (!label) { showToast('Enter a label first!', 'error'); return; }
+        await doSave(label);
+    }
+
+    async function saveSampleDraw() {
+        const label = document.getElementById('char-label-draw').value.trim().toUpperCase();
+        if (!label) { showToast('Enter a label first!', 'error'); return; }
+        await doSave(label);
+    }
+
+    async function doSave(label) {
+        const img = getDrawingImage();
+        try {
+            const res = await fetch('/api/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({label, image: img})
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast(`Saved "${label}" — ${data.count} samples`, 'success');
+                clearCanvas();
+                loadStats();
+            }
+        } catch(e) { showToast('Save failed!', 'error'); }
+    }
+
+    async function trainModel() {
+        document.getElementById('training-overlay').style.display = 'flex';
+        try {
+            const res = await fetch('/api/train', {method:'POST', headers:{'Content-Type':'application/json'}});
+            const data = await res.json();
+            document.getElementById('training-overlay').style.display = 'none';
+            if (data.success) {
+                showToast(`Trained! Accuracy: ${data.accuracy}%`, 'success');
+                document.getElementById('s-model').textContent = `${data.accuracy}% acc`;
+                document.getElementById('s-model').classList.add('model-ready');
+            } else {
+                showToast(data.message, 'error');
+            }
+        } catch(e) {
+            document.getElementById('training-overlay').style.display = 'none';
+            showToast('Training failed!', 'error');
+        }
+    }
+
+    async function predictDrawing() { await doPredict(); }
+    async function predictDraw() { await doPredict(); }
+
+    async function doPredict() {
+        const img = getDrawingImage();
+        try {
+            const res = await fetch('/api/predict', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({image: img})
+            });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('pred-char').textContent = data.prediction;
+                document.getElementById('pred-conf').textContent = data.confidence + '%';
+                const top3El = document.getElementById('pred-top3');
+                top3El.innerHTML = '';
+                if (data.top3) {
+                    data.top3.forEach(item => {
+                        top3El.innerHTML += `
+                            <div class="top3-item">
+                                <span class="top3-label">${item.label}</span>
+                                <div class="top3-bar-bg"><div class="top3-bar" style="width:${item.confidence}%"></div></div>
+                                <span class="top3-pct">${item.confidence}%</span>
+                            </div>`;
+                    });
+                }
+                document.getElementById('prediction-card').classList.add('glow');
+                setTimeout(() => document.getElementById('prediction-card').classList.remove('glow'), 1500);
+            } else {
+                showToast(data.message || 'Train the model first!', 'error');
+            }
+        } catch(e) { showToast('Prediction failed!', 'error'); }
+    }
+
+    async function loadStats() {
+        try {
+            const res = await fetch('/api/stats');
+            const data = await res.json();
+            document.getElementById('s-samples').textContent = data.total;
+            document.getElementById('s-classes').textContent = data.classes;
+            const c = document.getElementById('stats-container');
+            if (data.total === 0) { c.innerHTML = '<p class="empty-state">No samples yet.</p>'; return; }
+            c.innerHTML = '';
+            Object.entries(data.stats).sort((a,b) => b[1]-a[1]).forEach(([label, count]) => {
+                c.innerHTML += `
+                    <div class="stat-item">
+                        <span class="stat-label">${label}</span>
+                        <div class="stat-bar-bg"><div class="stat-bar" style="width:${Math.min(100,count*10)}%"></div></div>
+                        <span class="stat-count">${count}</span>
+                    </div>`;
+            });
+        } catch(e) {}
+    }
+
+    function showToast(msg, type='info') {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'toast show ' + type;
+        setTimeout(() => t.className = 'toast', 3000);
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT') return;
+        if (e.key === 'c') clearCanvas();
+        if (e.key === 'z' && e.ctrlKey) undoStroke();
+    });
+
+    loadStats();
+    </script>
+</body>
+</html>
