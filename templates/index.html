@@ -361,19 +361,23 @@
     // ============================================================
     let currentStream = null;
 
+    let sendFrameRunning = false;
+
     async function populateCameras() {
         try {
-            await navigator.mediaDevices.getUserMedia({video: true});
+            // Only enumerate — don't request camera permission yet
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoDevices = devices.filter(d => d.kind === 'videoinput');
             const select = document.getElementById('camera-select');
-            select.innerHTML = '';
-            videoDevices.forEach((device, index) => {
-                const opt = document.createElement('option');
-                opt.value = device.deviceId;
-                opt.text = device.label || `Camera ${index + 1}`;
-                select.appendChild(opt);
-            });
+            if (videoDevices.length > 0 && videoDevices[0].label) {
+                select.innerHTML = '';
+                videoDevices.forEach((device, index) => {
+                    const opt = document.createElement('option');
+                    opt.value = device.deviceId;
+                    opt.text = device.label || `Camera ${index + 1}`;
+                    select.appendChild(opt);
+                });
+            }
         } catch (e) {
             console.warn("Camera enumeration skipped:", e.message);
         }
@@ -399,41 +403,56 @@
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
             }
+            sendFrameRunning = false;
             currentStream = await navigator.mediaDevices.getUserMedia(constraints);
             videoEl.srcObject = currentStream;
-            videoEl.play();
+            await videoEl.play();
+
+            // Re-populate camera list now that we have permission
+            populateCameras();
 
             document.getElementById('s-camera').textContent = 'LIVE';
             document.getElementById('s-camera').style.color = 'var(--success)';
             document.getElementById('s-camera').style.textShadow = '0 0 10px var(--success-glow)';
 
             const sendFrame = async () => {
-                if (!cameraActive) return;
-                try {
-                    await hands.send({ image: videoEl });
-                } catch(e) {
-                    console.error("Camera loop error:", e);
-                }
-                requestAnimationFrame(sendFrame);
+                if (!cameraActive || sendFrameRunning) return;
+                sendFrameRunning = true;
+                const loop = async () => {
+                    if (!cameraActive) { sendFrameRunning = false; return; }
+                    try {
+                        await hands.send({ image: videoEl });
+                    } catch(e) {
+                        console.error("MediaPipe frame error:", e);
+                    }
+                    if (cameraActive) requestAnimationFrame(loop);
+                    else sendFrameRunning = false;
+                };
+                loop();
             };
             
             videoEl.addEventListener('loadeddata', () => {
                 sendFrame();
             }, { once: true });
             
-            setTimeout(() => {
-                if (videoEl.readyState >= 2 && cameraActive) sendFrame();
-            }, 500);
+            // Fallback if loadeddata already fired
+            if (videoEl.readyState >= 2) sendFrame();
 
         } catch (err) {
             console.error(err);
-            showToast(`Camera error: ${err.name} — ${err.message}`, 'error');
+            const msg = err.name === 'NotAllowedError' 
+                ? 'Camera permission denied. Please allow camera access in your browser settings.'
+                : err.name === 'NotFoundError'
+                ? 'No camera found. Connect a webcam or use Draw Mode instead.'
+                : `Camera error: ${err.name} — ${err.message}`;
+            showToast(msg, 'error');
             stopCamera();
         }
     }
 
     function stopCamera() {
         cameraActive = false;
+        sendFrameRunning = false;
         if (currentStream) {
             currentStream.getTracks().forEach(track => track.stop());
             currentStream = null;

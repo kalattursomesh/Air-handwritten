@@ -7,6 +7,5 @@ env/
 venv/
 .env
 .venv/
-training_data/
 *.pth
 .vscode/
