@@ -715,6 +715,7 @@
     // ============================================================
     let voiceRecognition = null;
     let isListening = false;
+    let voiceTranscript = '';
 
     function initVoice() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -730,6 +731,11 @@
             return;
         }
 
+        // Warn user if context is insecure (Speech API won't work on non-localhost HTTP)
+        if (!window.isSecureContext) {
+            showToast('⚠️ Security Warning: Voice requires HTTPS or localhost!', 'warning');
+        }
+
         voiceRecognition = new SpeechRecognition();
         voiceRecognition.continuous = false;
         voiceRecognition.interimResults = true;
@@ -737,6 +743,7 @@
 
         voiceRecognition.onstart = () => {
             isListening = true;
+            voiceTranscript = '';
             const btn = document.getElementById('voice-btn');
             btn.classList.add('recording');
             btn.innerHTML = '<span class="voice-icon">🛑</span> Stop Listening';
@@ -747,40 +754,56 @@
         };
 
         voiceRecognition.onresult = (event) => {
-            const transcript = Array.from(event.results)
-                .map(result => result[0])
-                .map(result => result.transcript)
-                .join('');
-            
+            let interimTranscript = '';
+            let finalTranscript = '';
+
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+
+            voiceTranscript = (finalTranscript || interimTranscript).trim();
             const status = document.getElementById('voice-status');
-            status.textContent = `Hearing: "${transcript}"`;
+            
+            if (voiceTranscript) {
+                status.textContent = `Hearing: "${voiceTranscript}"`;
+            } else {
+                status.textContent = 'Listening...';
+            }
         };
 
         voiceRecognition.onerror = (event) => {
             console.error("Speech recognition error:", event.error);
+            let msg = 'Speech recognition error';
             if (event.error === 'not-allowed') {
-                showToast('❌ Microphone permission denied!', 'error');
+                msg = '❌ Microphone permission denied! Check browser settings.';
             } else if (event.error === 'no-speech') {
-                showToast('⚠️ No speech detected.', 'warning');
+                msg = '⚠️ No speech detected. Speak closer or louder.';
+            } else if (event.error === 'network') {
+                msg = '🌐 Network error. Speech API requires an internet connection.';
+            } else if (event.error === 'aborted') {
+                msg = '⏹️ Listening aborted.';
             } else {
-                showToast(`Speech recognition error: ${event.error}`, 'error');
+                msg = `⚠️ Microphone error: ${event.error}`;
             }
+            showToast(msg, (event.error === 'no-speech' || event.error === 'aborted') ? 'warning' : 'error');
+            
+            voiceTranscript = '';
             stopListeningState();
         };
 
         voiceRecognition.onend = () => {
-            const statusText = document.getElementById('voice-status').textContent;
-            if (statusText.startsWith('Hearing: "')) {
-                const matches = statusText.match(/Hearing: "(.*)"/);
-                if (matches && matches[1]) {
-                    const text = matches[1].toUpperCase();
-                    // Append characters
-                    for (let i = 0; i < text.length; i++) {
-                        wordChars.push(text[i]);
-                    }
-                    updateWordDisplay();
-                    showToast(`🎙️ Added speech to Word Builder!`, 'success');
+            if (voiceTranscript) {
+                const text = voiceTranscript.toUpperCase();
+                // Append character sequence
+                for (let i = 0; i < text.length; i++) {
+                    wordChars.push(text[i]);
                 }
+                updateWordDisplay();
+                showToast(`🎙️ Added: "${text}"`, 'success');
             }
             stopListeningState();
         };
@@ -810,9 +833,11 @@
             voiceRecognition.stop();
         } else {
             try {
+                voiceTranscript = '';
                 voiceRecognition.start();
             } catch (e) {
                 console.error("Failed to start speech recognition:", e);
+                showToast("Could not start microphone. Try again.", "error");
             }
         }
     }
