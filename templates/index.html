@@ -122,6 +122,12 @@
                         <button onclick="copyWord()">📋 Copy</button>
                         <button onclick="clearWord()">🗑️ Clear</button>
                     </div>
+                    <div class="word-builder-voice">
+                        <button id="voice-btn" class="voice-btn" onclick="toggleVoiceRecognition()">
+                            <span class="voice-icon">🎙️</span> Dictate Speech
+                        </button>
+                        <span id="voice-status" class="voice-status">Ready</span>
+                    </div>
                 </div>
             </div>
 
@@ -702,6 +708,113 @@
         ).join('');
 
         wordText.textContent = wordChars.join('');
+    }
+
+    // ============================================================
+    // VOICE RECOGNITION (Web Speech API)
+    // ============================================================
+    let voiceRecognition = null;
+    let isListening = false;
+
+    function initVoice() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            const voiceBtn = document.getElementById('voice-btn');
+            if (voiceBtn) {
+                voiceBtn.disabled = true;
+                voiceBtn.style.opacity = '0.5';
+                voiceBtn.style.cursor = 'not-allowed';
+                voiceBtn.title = 'Web Speech API is not supported in this browser.';
+            }
+            document.getElementById('voice-status').textContent = 'Unsupported Browser';
+            return;
+        }
+
+        voiceRecognition = new SpeechRecognition();
+        voiceRecognition.continuous = false;
+        voiceRecognition.interimResults = true;
+        voiceRecognition.lang = 'en-US';
+
+        voiceRecognition.onstart = () => {
+            isListening = true;
+            const btn = document.getElementById('voice-btn');
+            btn.classList.add('recording');
+            btn.innerHTML = '<span class="voice-icon">🛑</span> Stop Listening';
+            const status = document.getElementById('voice-status');
+            status.textContent = 'Listening...';
+            status.classList.add('listening');
+            showToast('🎙️ Voice recognition active. Speak now!', 'info');
+        };
+
+        voiceRecognition.onresult = (event) => {
+            const transcript = Array.from(event.results)
+                .map(result => result[0])
+                .map(result => result.transcript)
+                .join('');
+            
+            const status = document.getElementById('voice-status');
+            status.textContent = `Hearing: "${transcript}"`;
+        };
+
+        voiceRecognition.onerror = (event) => {
+            console.error("Speech recognition error:", event.error);
+            if (event.error === 'not-allowed') {
+                showToast('❌ Microphone permission denied!', 'error');
+            } else if (event.error === 'no-speech') {
+                showToast('⚠️ No speech detected.', 'warning');
+            } else {
+                showToast(`Speech recognition error: ${event.error}`, 'error');
+            }
+            stopListeningState();
+        };
+
+        voiceRecognition.onend = () => {
+            const statusText = document.getElementById('voice-status').textContent;
+            if (statusText.startsWith('Hearing: "')) {
+                const matches = statusText.match(/Hearing: "(.*)"/);
+                if (matches && matches[1]) {
+                    const text = matches[1].toUpperCase();
+                    // Append characters
+                    for (let i = 0; i < text.length; i++) {
+                        wordChars.push(text[i]);
+                    }
+                    updateWordDisplay();
+                    showToast(`🎙️ Added speech to Word Builder!`, 'success');
+                }
+            }
+            stopListeningState();
+        };
+    }
+
+    function stopListeningState() {
+        isListening = false;
+        const btn = document.getElementById('voice-btn');
+        if (btn) {
+            btn.classList.remove('recording');
+            btn.innerHTML = '<span class="voice-icon">🎙️</span> Dictate Speech';
+        }
+        const status = document.getElementById('voice-status');
+        if (status) {
+            status.textContent = 'Ready';
+            status.classList.remove('listening');
+        }
+    }
+
+    function toggleVoiceRecognition() {
+        if (!voiceRecognition) {
+            initVoice();
+        }
+        if (!voiceRecognition) return;
+
+        if (isListening) {
+            voiceRecognition.stop();
+        } else {
+            try {
+                voiceRecognition.start();
+            } catch (e) {
+                console.error("Failed to start speech recognition:", e);
+            }
+        }
     }
 
     // ============================================================
