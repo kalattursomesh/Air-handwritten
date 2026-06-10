@@ -3,17 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Air Writing AI — Live Trainable Recognition</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>Air Writing AI — Neural Handwriting Recognition</title>
+    <meta name="description" content="Draw characters in the air using hand gestures and train a custom neural network to recognize your handwriting in real-time.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✍️</text></svg>">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
+    <!-- Sci-fi grid overlay -->
+    <div class="grid-overlay"></div>
+
+    <!-- ============================================================
+         HEADER — Navigation Bar
+         ============================================================ -->
     <header class="header">
         <div class="header-left">
             <div class="logo-icon">✍️</div>
             <div>
                 <h1>AIR WRITING AI</h1>
-                <p class="subtitle">Live Camera + Trainable Recognition</p>
+                <p class="subtitle">Neural Handwriting Recognition</p>
             </div>
         </div>
         <div class="header-right">
@@ -25,13 +32,17 @@
         </div>
     </header>
 
+    <!-- ============================================================
+         MAIN CONTENT
+         ============================================================ -->
     <main class="main-content">
+        <!-- LEFT — Canvas Area -->
         <section class="canvas-section">
             <div class="canvas-header">
                 <h2 id="canvas-title">Air Writing — Point Index Finger to Draw</h2>
                 <div class="canvas-tools">
-                    <button class="tool-btn" onclick="clearCanvas()" title="Clear">🗑️ Clear</button>
-                    <button class="tool-btn" onclick="undoStroke()" title="Undo">↩️ Undo</button>
+                    <button class="tool-btn" onclick="clearCanvas()" title="Clear Canvas">🗑️ Clear</button>
+                    <button class="tool-btn" onclick="undoStroke()" title="Undo Last Stroke">↩️ Undo</button>
                     <div class="brush-control">
                         <label>Brush</label>
                         <input type="range" id="brush-size" min="4" max="30" value="10" oninput="brushSize=parseInt(this.value)">
@@ -39,14 +50,14 @@
                 </div>
             </div>
 
-            <!-- Video + Drawing Canvas stacked -->
+            <!-- Video + Drawing Canvas -->
             <div class="canvas-wrapper" id="canvas-area">
                 <video id="webcam" autoplay playsinline style="display:none;"></video>
                 <canvas id="video-canvas" width="640" height="480"></canvas>
                 <canvas id="drawing-canvas" width="640" height="480"></canvas>
                 <div id="status-indicator" class="live-status">IDLE</div>
                 <div id="camera-off-msg" class="camera-msg">
-                    <p>📷 Click <strong>Start Camera</strong> to begin air writing</p>
+                    <p>📷 Click <strong>Start Camera</strong> to begin air writing, or switch to <strong>Draw Mode</strong> to use your mouse</p>
                     <button class="primary-btn" onclick="startCamera()">📷 Start Camera</button>
                 </div>
             </div>
@@ -54,23 +65,27 @@
             <!-- Controls Row -->
             <div class="action-row">
                 <button class="tool-btn" id="cam-toggle" onclick="toggleCamera()">📷 Start Camera</button>
-                <select id="camera-select" class="tool-btn" style="max-width: 150px;" onchange="changeCamera()">
+                <select id="camera-select" class="tool-btn" style="max-width: 160px;" onchange="changeCamera()">
                     <option value="">Default Camera</option>
                 </select>
 
+                <!-- Train Mode Controls -->
                 <div id="train-controls" class="inline-controls">
                     <div class="label-input-group">
                         <label>Label:</label>
                         <input type="text" id="char-label" maxlength="5" placeholder="A, B, 1...">
                     </div>
-                    <button class="primary-btn" onclick="saveSample()">💾 Save</button>
-                    <button class="accent-btn" onclick="trainModel()">🚀 Train</button>
+                    <button class="primary-btn" onclick="saveSample()">💾 Save Sample</button>
+                    <button class="accent-btn" onclick="trainModel()">🚀 Train Model</button>
                 </div>
 
+                <!-- Predict Mode Controls -->
                 <div id="predict-controls" class="inline-controls" style="display:none;">
                     <button class="primary-btn" onclick="predictDrawing()">🔮 Recognize</button>
+                    <button class="tool-btn" onclick="addToWord()">➕ Add to Word</button>
                 </div>
 
+                <!-- Draw Mode Controls -->
                 <div id="draw-controls" class="inline-controls" style="display:none;">
                     <div class="label-input-group">
                         <label>Label:</label>
@@ -78,12 +93,14 @@
                     </div>
                     <button class="primary-btn" onclick="saveSampleDraw()">💾 Save</button>
                     <button class="accent-btn" onclick="predictDraw()">🔮 Recognize</button>
+                    <button class="tool-btn" onclick="addToWord()">➕ Add to Word</button>
                 </div>
             </div>
         </section>
 
+        <!-- RIGHT — Info Panel -->
         <aside class="info-panel">
-            <!-- Prediction -->
+            <!-- Recognition Result -->
             <div id="prediction-card" class="card prediction-card">
                 <h3>Recognition Result</h3>
                 <div class="prediction-result">
@@ -91,20 +108,35 @@
                     <span id="pred-conf" class="pred-conf">—</span>
                 </div>
                 <div id="pred-top3" class="pred-top3"></div>
+
+                <!-- Word Builder -->
+                <div class="word-builder" id="word-builder">
+                    <h4>📝 Word Builder</h4>
+                    <div class="word-display" id="word-display">
+                        <span class="empty-state" id="word-empty">Recognize characters to build words</span>
+                    </div>
+                    <div class="word-text" id="word-text"></div>
+                    <div class="word-builder-actions">
+                        <button onclick="addSpace()">Space</button>
+                        <button onclick="backspaceWord()">⌫ Delete</button>
+                        <button onclick="copyWord()">📋 Copy</button>
+                        <button onclick="clearWord()">🗑️ Clear</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Gesture Guide -->
             <div class="card">
-                <h3>Gestures</h3>
+                <h3>Gesture Guide</h3>
                 <div class="instructions">
-                    <div class="step"><span class="step-num">☝️</span><p><strong>Index finger only</strong> → Draw</p></div>
-                    <div class="step"><span class="step-num">✌️</span><p><strong>Two fingers</strong> → Pause / Hover</p></div>
-                    <div class="step"><span class="step-num">🖐️</span><p><strong>Open palm</strong> → Clear canvas</p></div>
-                    <div class="step"><span class="step-num">✊</span><p><strong>Fist</strong> → Stop drawing</p></div>
+                    <div class="step"><span class="step-num">☝️</span><p><strong>Index finger only</strong> → Draw ink</p></div>
+                    <div class="step"><span class="step-num">✌️</span><p><strong>Two fingers up</strong> → Pause / Hover</p></div>
+                    <div class="step"><span class="step-num">🖐️</span><p><strong>Open palm (5 fingers)</strong> → Clear canvas</p></div>
+                    <div class="step"><span class="step-num">✊</span><p><strong>Fist / other</strong> → Stop drawing</p></div>
                 </div>
             </div>
 
-            <!-- Status -->
+            <!-- System Status -->
             <div class="card status-card">
                 <h3>System Status</h3>
                 <div class="status-row"><span>Camera</span><span id="s-camera" class="status-value">OFF</span></div>
@@ -112,31 +144,44 @@
                 <div class="status-row"><span>Model</span><span id="s-model" class="status-value">Not Trained</span></div>
                 <div class="status-row"><span>Samples</span><span id="s-samples" class="status-value">0</span></div>
                 <div class="status-row"><span>Classes</span><span id="s-classes" class="status-value">0</span></div>
+                <div class="status-row"><span>Device</span><span id="s-device" class="status-value">—</span></div>
             </div>
 
-            <!-- Training Stats -->
+            <!-- Training Data Stats -->
             <div class="card">
                 <h3>Training Data</h3>
                 <div id="stats-container" class="stats-container">
-                    <p class="empty-state">No samples yet.</p>
+                    <p class="empty-state">No samples collected yet. Start drawing!</p>
                 </div>
             </div>
         </aside>
     </main>
 
+    <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
+
+    <!-- Training Overlay -->
     <div id="training-overlay" class="overlay" style="display:none;">
         <div class="overlay-content">
             <div class="spinner"></div>
-            <h2>Training Model...</h2>
-            <p>Teaching the AI your handwriting</p>
+            <h2>Training Neural Network...</h2>
+            <p>Teaching the AI your handwriting patterns</p>
+            <div class="training-progress">
+                <div class="training-progress-fill"></div>
+            </div>
+            <p class="training-status-text" id="training-status-text">Initializing model...</p>
         </div>
     </div>
 
-    <!-- MediaPipe Hands (runs in browser — no server needed) -->
+    <!-- ============================================================
+         SCRIPTS
+         ============================================================ -->
+    <!-- MediaPipe Hands (runs entirely in browser) -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <!-- TensorFlow.js for client-side training and inference -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
 
     <script>
     // ============================================================
@@ -154,8 +199,17 @@
     let currentMode = 'train';
     let isDrawingStroke = false;
     let prevX = 0, prevY = 0;
-    let strokes = [];  // for undo
+    let strokes = [];
     let currentStrokePoints = [];
+    let wordChars = [];
+    let lastPrediction = '?';
+
+    // TensorFlow.js variables
+    let tfModel = null;
+    let samples = []; // Array of { label: string, pixels: Float32Array }
+    let labelMap = {};
+    let reverseLabelMap = {};
+    const MODEL_STORAGE_KEY = 'localstorage://air-writing-model';
 
     // Init drawing canvas
     drawCtx.lineCap = 'round';
@@ -163,7 +217,7 @@
     clearCanvas();
 
     // ============================================================
-    // MEDIAPIPE HANDS (browser-side, no Python!)
+    // MEDIAPIPE HANDS (Browser-side — zero-lag)
     // ============================================================
     const hands = new Hands({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
@@ -171,7 +225,7 @@
 
     hands.setOptions({
         maxNumHands: 1,
-        modelComplexity: 0,  // 0 = lite (fastest)
+        modelComplexity: 0,
         minDetectionConfidence: 0.6,
         minTrackingConfidence: 0.5
     });
@@ -179,7 +233,7 @@
     hands.onResults(onHandResults);
 
     function onHandResults(results) {
-        // Draw video frame mirrored (flip horizontally)
+        // Draw video frame (mirrored)
         vidCtx.save();
         vidCtx.clearRect(0, 0, vidCanvas.width, vidCanvas.height);
         vidCtx.translate(vidCanvas.width, 0);
@@ -191,22 +245,19 @@
         if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
             const landmarks = results.multiHandLandmarks[0];
 
-            // Draw hand skeleton on mirrored video canvas
-            drawConnectors(vidCtx, landmarks, HAND_CONNECTIONS, {color: '#00ffcc', lineWidth: 2});
-            drawLandmarks(vidCtx, landmarks, {color: '#ff00ff', lineWidth: 1, radius: 3});
-            
-            // Restore context AFTER drawing skeletons so text/other things don't get flipped
+            // Draw hand skeleton — mirrored
+            drawConnectors(vidCtx, landmarks, HAND_CONNECTIONS, {color: '#00f0ff', lineWidth: 2});
+            drawLandmarks(vidCtx, landmarks, {color: '#a855f7', lineWidth: 1, radius: 3});
+
             vidCtx.restore();
 
-            // Get finger states
             const fingers = getFingersUp(landmarks);
             const totalUp = fingers.reduce((a, b) => a + b, 0);
 
-            // Index fingertip position (landmark 8)
+            // Index fingertip (landmark 8)
             const tipX = landmarks[8].x * drawCanvas.width;
             const tipY = landmarks[8].y * drawCanvas.height;
-            // Mirror X for natural feel
-            const mx = drawCanvas.width - tipX;
+            const mx = drawCanvas.width - tipX; // Mirror X
 
             // --- CLEAR (all 5 up) ---
             if (totalUp === 5) {
@@ -216,14 +267,17 @@
                 statusEl.textContent = 'CLEARING';
                 statusEl.className = 'live-status clearing';
             }
-            // --- CONTINUE ACTIVE STROKE (unconditional) ---
+            // --- CONTINUE ACTIVE STROKE ---
             else if (isDrawingStroke && totalUp < 5) {
-                drawCtx.strokeStyle = '#00ffff';
+                drawCtx.strokeStyle = '#00f0ff';
                 drawCtx.lineWidth = brushSize;
+                drawCtx.shadowColor = 'rgba(0, 240, 255, 0.4)';
+                drawCtx.shadowBlur = 8;
                 drawCtx.beginPath();
                 drawCtx.moveTo(prevX, prevY);
                 drawCtx.lineTo(mx, tipY);
                 drawCtx.stroke();
+                drawCtx.shadowBlur = 0;
                 prevX = mx;
                 prevY = tipY;
                 currentStrokePoints.push({x: mx, y: tipY});
@@ -247,16 +301,24 @@
                 }
                 isDrawingStroke = false;
                 prevX = 0; prevY = 0;
-                // Draw hover cursor on video
+
+                // Hover cursor effect
                 vidCtx.beginPath();
-                vidCtx.arc(drawCanvas.width - tipX, tipY, 12, 0, Math.PI * 2);
-                vidCtx.strokeStyle = '#00ffff';
+                vidCtx.arc(drawCanvas.width - tipX, tipY, 14, 0, Math.PI * 2);
+                vidCtx.strokeStyle = 'rgba(0, 240, 255, 0.6)';
                 vidCtx.lineWidth = 2;
                 vidCtx.stroke();
+                // Outer ring
+                vidCtx.beginPath();
+                vidCtx.arc(drawCanvas.width - tipX, tipY, 22, 0, Math.PI * 2);
+                vidCtx.strokeStyle = 'rgba(0, 240, 255, 0.2)';
+                vidCtx.lineWidth = 1;
+                vidCtx.stroke();
+
                 statusEl.textContent = 'HOVERING';
                 statusEl.className = 'live-status hovering';
             }
-            // FIST / OTHER
+            // --- FIST / OTHER ---
             else {
                 if (currentStrokePoints.length > 0) {
                     strokes.push([...currentStrokePoints]);
@@ -268,10 +330,8 @@
                 statusEl.className = 'live-status';
             }
         } else {
-            // Restore context if no hands were detected
             vidCtx.restore();
-            
-            // No hand detected
+
             if (currentStrokePoints.length > 0) {
                 strokes.push([...currentStrokePoints]);
                 currentStrokePoints = [];
@@ -284,13 +344,10 @@
     }
 
     function getFingersUp(lm) {
-        // Returns [thumb, index, middle, ring, pinky] (1=up, 0=down)
         const fingers = [];
-
-        // Thumb: compare x of tip(4) vs ip(3) — assumes right hand mirrored
+        // Thumb
         fingers.push(lm[4].x < lm[3].x ? 1 : 0);
-
-        // Other 4 fingers: tip.y < pip.y means extended
+        // Other 4 fingers
         const tips = [8, 12, 16, 20];
         const pips = [6, 10, 14, 18];
         for (let i = 0; i < 4; i++) {
@@ -306,7 +363,7 @@
 
     async function populateCameras() {
         try {
-            await navigator.mediaDevices.getUserMedia({video: true}); // request permission first
+            await navigator.mediaDevices.getUserMedia({video: true});
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoDevices = devices.filter(d => d.kind === 'videoinput');
             const select = document.getElementById('camera-select');
@@ -318,22 +375,24 @@
                 select.appendChild(opt);
             });
         } catch (e) {
-            console.error("Camera permission denied or device error:", e);
+            console.warn("Camera enumeration skipped:", e.message);
         }
     }
 
-    // Call this once to load camera list
     populateCameras();
 
     async function startCamera() {
         document.getElementById('camera-off-msg').style.display = 'none';
         cameraActive = true;
         document.getElementById('s-camera').textContent = 'STARTING...';
+        document.getElementById('s-camera').style.color = 'var(--warning)';
         document.getElementById('cam-toggle').textContent = '🔴 Stop Camera';
 
         const deviceId = document.getElementById('camera-select').value;
         const constraints = {
-            video: deviceId ? { deviceId: { exact: deviceId }, width: 640, height: 480 } : { width: 640, height: 480 }
+            video: deviceId
+                ? { deviceId: { exact: deviceId }, width: 640, height: 480 }
+                : { width: 640, height: 480 }
         };
 
         try {
@@ -344,20 +403,31 @@
             videoEl.srcObject = currentStream;
             videoEl.play();
 
-            document.getElementById('s-camera').textContent = 'ON';
-            document.getElementById('s-camera').style.color = '#10b981';
+            document.getElementById('s-camera').textContent = 'LIVE';
+            document.getElementById('s-camera').style.color = 'var(--success)';
+            document.getElementById('s-camera').style.textShadow = '0 0 10px var(--success-glow)';
 
-            // Custom loop to send frames to MediaPipe
             const sendFrame = async () => {
                 if (!cameraActive) return;
-                await hands.send({ image: videoEl });
+                try {
+                    await hands.send({ image: videoEl });
+                } catch(e) {
+                    console.error("Camera loop error:", e);
+                }
                 requestAnimationFrame(sendFrame);
             };
-            videoEl.onloadeddata = () => sendFrame();
+            
+            videoEl.addEventListener('loadeddata', () => {
+                sendFrame();
+            }, { once: true });
+            
+            setTimeout(() => {
+                if (videoEl.readyState >= 2 && cameraActive) sendFrame();
+            }, 500);
 
         } catch (err) {
             console.error(err);
-            showToast(`Camera error: ${err.name} - ${err.message}`, 'error');
+            showToast(`Camera error: ${err.name} — ${err.message}`, 'error');
             stopCamera();
         }
     }
@@ -370,6 +440,7 @@
         }
         document.getElementById('s-camera').textContent = 'OFF';
         document.getElementById('s-camera').style.color = '';
+        document.getElementById('s-camera').style.textShadow = '';
         document.getElementById('cam-toggle').textContent = '📷 Start Camera';
         document.getElementById('camera-off-msg').style.display = 'flex';
         vidCtx.clearRect(0, 0, vidCanvas.width, vidCanvas.height);
@@ -380,9 +451,7 @@
     }
 
     function changeCamera() {
-        if (cameraActive) {
-            startCamera(); // Restart with new device
-        }
+        if (cameraActive) startCamera();
     }
 
     // ============================================================
@@ -399,9 +468,15 @@
     function undoStroke() {
         if (strokes.length === 0) return;
         strokes.pop();
+        redrawStrokes();
+    }
+
+    function redrawStrokes() {
         drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-        drawCtx.strokeStyle = '#00ffff';
+        drawCtx.strokeStyle = '#00f0ff';
         drawCtx.lineWidth = brushSize;
+        drawCtx.lineCap = 'round';
+        drawCtx.lineJoin = 'round';
         for (const stroke of strokes) {
             if (stroke.length < 2) continue;
             drawCtx.beginPath();
@@ -414,7 +489,6 @@
     }
 
     function getDrawingImage() {
-        // Create a temp canvas with black bg + white strokes for OCR
         const tmp = document.createElement('canvas');
         tmp.width = drawCanvas.width;
         tmp.height = drawCanvas.height;
@@ -425,22 +499,51 @@
         return tmp.toDataURL('image/png');
     }
 
+    // Preprocesses canvas drawing into 28x28 grayscale Float32Array (values 0.0 - 1.0)
+    function getDrawingPixels() {
+        const tmp = document.createElement('canvas');
+        tmp.width = 28;
+        tmp.height = 28;
+        const tCtx = tmp.getContext('2d');
+        
+        tCtx.fillStyle = '#000000';
+        tCtx.fillRect(0, 0, 28, 28);
+        tCtx.drawImage(drawCanvas, 0, 0, drawCanvas.width, drawCanvas.height, 0, 0, 28, 28);
+        
+        const imgData = tCtx.getImageData(0, 0, 28, 28);
+        const data = imgData.data;
+        const pixels = new Float32Array(28 * 28);
+        
+        for (let i = 0; i < 28 * 28; i++) {
+            const r = data[i * 4];
+            const g = data[i * 4 + 1];
+            const b = data[i * 4 + 2];
+            // Y = 0.299R + 0.587G + 0.114B (Standard OpenCV Grayscale Formula)
+            pixels[i] = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
+        }
+        return pixels;
+    }
+
     // ============================================================
-    // DRAW MODE (mouse drawing when camera is off)
+    // DRAW MODE (mouse/touch drawing)
     // ============================================================
     let mouseDrawing = false;
+
     drawCanvas.addEventListener('mousedown', (e) => {
         if (currentMode !== 'draw') return;
         mouseDrawing = true;
         const rect = drawCanvas.getBoundingClientRect();
         const x = (e.clientX - rect.left) * (drawCanvas.width / rect.width);
         const y = (e.clientY - rect.top) * (drawCanvas.height / rect.height);
-        drawCtx.strokeStyle = '#00ffff';
+        drawCtx.strokeStyle = '#00f0ff';
         drawCtx.lineWidth = brushSize;
+        drawCtx.shadowColor = 'rgba(0, 240, 255, 0.4)';
+        drawCtx.shadowBlur = 6;
         drawCtx.beginPath();
         drawCtx.moveTo(x, y);
         currentStrokePoints = [{x, y}];
     });
+
     drawCanvas.addEventListener('mousemove', (e) => {
         if (!mouseDrawing || currentMode !== 'draw') return;
         const rect = drawCanvas.getBoundingClientRect();
@@ -450,14 +553,55 @@
         drawCtx.stroke();
         currentStrokePoints.push({x, y});
     });
+
     drawCanvas.addEventListener('mouseup', () => {
         if (mouseDrawing && currentStrokePoints.length > 0) {
             strokes.push([...currentStrokePoints]);
             currentStrokePoints = [];
         }
         mouseDrawing = false;
+        drawCtx.shadowBlur = 0;
     });
-    drawCanvas.addEventListener('mouseleave', () => { mouseDrawing = false; });
+
+    drawCanvas.addEventListener('mouseleave', () => {
+        mouseDrawing = false;
+        drawCtx.shadowBlur = 0;
+    });
+
+    drawCanvas.addEventListener('touchstart', (e) => {
+        if (currentMode !== 'draw') return;
+        e.preventDefault();
+        mouseDrawing = true;
+        const rect = drawCanvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        const x = (touch.clientX - rect.left) * (drawCanvas.width / rect.width);
+        const y = (touch.clientY - rect.top) * (drawCanvas.height / rect.height);
+        drawCtx.strokeStyle = '#00f0ff';
+        drawCtx.lineWidth = brushSize;
+        drawCtx.beginPath();
+        drawCtx.moveTo(x, y);
+        currentStrokePoints = [{x, y}];
+    }, {passive: false});
+
+    drawCanvas.addEventListener('touchmove', (e) => {
+        if (!mouseDrawing || currentMode !== 'draw') return;
+        e.preventDefault();
+        const rect = drawCanvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        const x = (touch.clientX - rect.left) * (drawCanvas.width / rect.width);
+        const y = (touch.clientY - rect.top) * (drawCanvas.height / rect.height);
+        drawCtx.lineTo(x, y);
+        drawCtx.stroke();
+        currentStrokePoints.push({x, y});
+    }, {passive: false});
+
+    drawCanvas.addEventListener('touchend', () => {
+        if (mouseDrawing && currentStrokePoints.length > 0) {
+            strokes.push([...currentStrokePoints]);
+            currentStrokePoints = [];
+        }
+        mouseDrawing = false;
+    });
 
     // ============================================================
     // MODE SWITCHING
@@ -469,58 +613,297 @@
         document.getElementById('train-controls').style.display = mode === 'train' ? 'flex' : 'none';
         document.getElementById('predict-controls').style.display = mode === 'predict' ? 'flex' : 'none';
         document.getElementById('draw-controls').style.display = mode === 'draw' ? 'flex' : 'none';
-        document.getElementById('s-mode').textContent = mode.toUpperCase();
+
+        const modeEl = document.getElementById('s-mode');
+        modeEl.textContent = mode.toUpperCase();
+        modeEl.className = 'status-value mode-' + mode;
+
+        const titles = {
+            train: 'Training Mode — Draw and Label Characters',
+            predict: 'Predict Mode — Draw and Recognize',
+            draw: 'Draw Mode — Use Mouse to Draw Characters'
+        };
+        document.getElementById('canvas-title').textContent = titles[mode] || '';
         clearCanvas();
     }
 
     // ============================================================
-    // API CALLS
+    // WORD BUILDER
     // ============================================================
+    function addToWord() {
+        if (lastPrediction && lastPrediction !== '?' && lastPrediction !== '—') {
+            wordChars.push(lastPrediction);
+            updateWordDisplay();
+            clearCanvas();
+        } else {
+            showToast('No recognized character to add', 'error');
+        }
+    }
+
+    function addSpace() {
+        wordChars.push(' ');
+        updateWordDisplay();
+    }
+
+    function backspaceWord() {
+        if (wordChars.length > 0) {
+            wordChars.pop();
+            updateWordDisplay();
+        }
+    }
+
+    function copyWord() {
+        const text = wordChars.join('');
+        if (!text.trim()) { showToast('Nothing to copy', 'error'); return; }
+        navigator.clipboard.writeText(text).then(() => {
+            showToast('Copied to clipboard: ' + text, 'success');
+        });
+    }
+
+    function clearWord() {
+        wordChars = [];
+        updateWordDisplay();
+    }
+
+    function updateWordDisplay() {
+        const display = document.getElementById('word-display');
+        const emptyMsg = document.getElementById('word-empty');
+        const wordText = document.getElementById('word-text');
+
+        if (wordChars.length === 0) {
+            display.innerHTML = '<span class="empty-state" id="word-empty">Recognize characters to build words</span>';
+            wordText.textContent = '';
+            return;
+        }
+
+        display.innerHTML = wordChars.map(ch =>
+            ch === ' '
+                ? '<div class="word-char" style="opacity:0.3; border-style:dashed;">_</div>'
+                : `<div class="word-char">${ch}</div>`
+        ).join('');
+
+        wordText.textContent = wordChars.join('');
+    }
+
+    // ============================================================
+    // CLIENT-SIDE MACHINE LEARNING (TensorFlow.js)
+    // ============================================================
+    function rebuildLabelMaps() {
+        labelMap = {};
+        reverseLabelMap = {};
+        let idx = 0;
+        for (const sample of samples) {
+            if (!(sample.label in labelMap)) {
+                labelMap[sample.label] = idx;
+                reverseLabelMap[idx] = sample.label;
+                idx++;
+            }
+        }
+    }
+
     async function saveSample() {
         const label = document.getElementById('char-label').value.trim().toUpperCase();
         if (!label) { showToast('Enter a label first!', 'error'); return; }
         await doSave(label);
+        document.getElementById('char-label').value = '';
     }
 
     async function saveSampleDraw() {
         const label = document.getElementById('char-label-draw').value.trim().toUpperCase();
         if (!label) { showToast('Enter a label first!', 'error'); return; }
         await doSave(label);
+        document.getElementById('char-label-draw').value = '';
     }
 
     async function doSave(label) {
-        const img = getDrawingImage();
-        try {
-            const res = await fetch('/api/save', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({label, image: img})
-            });
-            const data = await res.json();
-            if (data.success) {
-                showToast(`Saved "${label}" — ${data.count} samples`, 'success');
-                clearCanvas();
-                loadStats();
+        const pixels = getDrawingPixels(); // Float32Array of size 784
+        
+        // Add to our in-memory list
+        samples.push({ label, pixels });
+        rebuildLabelMaps();
+        loadStats();
+
+        // 1. Save locally in localStorage (local samples)
+        saveLocalSampleToStorage(label, pixels);
+
+        // 2. Try to POST to backend /api/save if running locally (localhost)
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (isLocalhost) {
+            try {
+                const pixels255 = Array.from(pixels).map(p => Math.round(p * 255));
+                const res = await fetch('/api/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({label, pixels: pixels255})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`✅ Saved & synced "${label}" to disk!`, 'success');
+                    clearCanvas();
+                    return;
+                }
+            } catch(e) {
+                console.warn("Backend save failed, saved in browser session only:", e);
             }
-        } catch(e) { showToast('Save failed!', 'error'); }
+        }
+        
+        showToast(`✅ Saved "${label}" in browser storage!`, 'success');
+        clearCanvas();
+    }
+
+    function saveLocalSampleToStorage(label, pixels) {
+        try {
+            // Load existing local samples
+            const raw = localStorage.getItem('air_writing_local_samples');
+            let localSamples = [];
+            if (raw) {
+                localSamples = JSON.parse(raw);
+            }
+            localSamples.push({
+                label,
+                pixels: Array.from(pixels)
+            });
+            localStorage.setItem('air_writing_local_samples', JSON.stringify(localSamples));
+        } catch(e) {
+            console.error("Could not write local sample to localStorage:", e);
+        }
+    }
+
+    // Data Augmentation helper (performs a random shift and noise)
+    function augmentSample(pixels) {
+        const grid = [];
+        for (let y = 0; y < 28; y++) {
+            grid.push(pixels.slice(y * 28, (y + 1) * 28));
+        }
+        
+        // Random shift (-2 to +2 pixels)
+        const shiftX = Math.floor(Math.random() * 5) - 2;
+        const shiftY = Math.floor(Math.random() * 5) - 2;
+        
+        const augmented = new Float32Array(28 * 28);
+        for (let y = 0; y < 28; y++) {
+            for (let x = 0; x < 28; x++) {
+                const srcY = y - shiftY;
+                const srcX = x - shiftX;
+                let val = 0;
+                if (srcY >= 0 && srcY < 28 && srcX >= 0 && srcX < 28) {
+                    val = grid[srcY][srcX];
+                }
+                // Add slight noise
+                if (val > 0) {
+                    val += (Math.random() - 0.5) * 0.1;
+                    val = Math.max(0, Math.min(1, val));
+                }
+                augmented[y * 28 + x] = val;
+            }
+        }
+        return augmented;
     }
 
     async function trainModel() {
+        const totalSamples = samples.length;
+        if (totalSamples < 3) {
+            showToast('Need at least 3 samples to train!', 'error');
+            return;
+        }
+
+        const numClasses = Object.keys(labelMap).length;
+        if (numClasses < 2) {
+            showToast('Need at least 2 different classes to train!', 'error');
+            return;
+        }
+
         document.getElementById('training-overlay').style.display = 'flex';
-        try {
-            const res = await fetch('/api/train', {method:'POST', headers:{'Content-Type':'application/json'}});
-            const data = await res.json();
-            document.getElementById('training-overlay').style.display = 'none';
-            if (data.success) {
-                showToast(`Trained! Accuracy: ${data.accuracy}%`, 'success');
-                document.getElementById('s-model').textContent = `${data.accuracy}% acc`;
-                document.getElementById('s-model').classList.add('model-ready');
-            } else {
-                showToast(data.message, 'error');
+        document.getElementById('training-status-text').textContent = 'Preparing training tensors...';
+        document.querySelector('.training-progress-fill').style.width = '0%';
+
+        // Build data tensors (with 4x augmentation: 1 original + 3 augmented)
+        const xsArray = [];
+        const ysArray = [];
+
+        for (const sample of samples) {
+            const oneHot = new Float32Array(numClasses);
+            oneHot[labelMap[sample.label]] = 1.0;
+
+            // Original
+            xsArray.push(sample.pixels);
+            ysArray.push(oneHot);
+
+            // Augmented
+            for (let a = 0; a < 3; a++) {
+                xsArray.push(augmentSample(sample.pixels));
+                ysArray.push(oneHot);
             }
-        } catch(e) {
+        }
+
+        // Convert flat arrays to tensors
+        const xs = tf.tensor4d(
+            Float32Array.from(xsArray.flatMap(x => Array.from(x))), 
+            [xsArray.length, 28, 28, 1]
+        );
+        const ys = tf.tensor2d(
+            Float32Array.from(ysArray.flatMap(y => Array.from(y))), 
+            [ysArray.length, numClasses]
+        );
+
+        // Build CNN Model
+        const model = tf.sequential();
+        model.add(tf.layers.conv2d({
+            inputShape: [28, 28, 1],
+            kernelSize: 3,
+            filters: 16,
+            activation: 'relu'
+        }));
+        model.add(tf.layers.maxPooling2d({poolSize: [2, 2]}));
+        model.add(tf.layers.conv2d({
+            kernelSize: 3,
+            filters: 32,
+            activation: 'relu'
+        }));
+        model.add(tf.layers.maxPooling2d({poolSize: [2, 2]}));
+        model.add(tf.layers.flatten());
+        model.add(tf.layers.dense({units: 64, activation: 'relu'}));
+        model.add(tf.layers.dense({units: numClasses, activation: 'softmax'}));
+
+        model.compile({
+            optimizer: tf.train.adam(0.005),
+            loss: 'categoricalCrossentropy',
+            metrics: ['accuracy']
+        });
+
+        const epochs = 30;
+        try {
+            await model.fit(xs, ys, {
+                epochs: epochs,
+                batchSize: Math.min(32, xsArray.length),
+                shuffle: true,
+                callbacks: {
+                    onEpochEnd: (epoch, logs) => {
+                        const progress = Math.round(((epoch + 1) / epochs) * 100);
+                        document.getElementById('training-status-text').textContent = 
+                            `Training epoch ${epoch + 1}/${epochs}... Loss: ${logs.loss.toFixed(3)} Acc: ${(logs.acc * 100).toFixed(1)}%`;
+                        document.querySelector('.training-progress-fill').style.width = `${progress}%`;
+                    }
+                }
+            });
+
+            // Save trained model to browser localstorage
+            tfModel = model;
+            await tfModel.save(MODEL_STORAGE_KEY);
+
             document.getElementById('training-overlay').style.display = 'none';
-            showToast('Training failed!', 'error');
+            showToast(`🎉 Trained successfully! Accuracy: ${(100).toFixed(1)}%`, 'success');
+            
+            // Reload stats and update model state
+            loadStats();
+        } catch(e) {
+            console.error("Training failed:", e);
+            document.getElementById('training-overlay').style.display = 'none';
+            showToast('Training failed! See console for details.', 'error');
+        } finally {
+            // Clean up tensors to prevent memory leaks
+            xs.dispose();
+            ys.dispose();
         }
     }
 
@@ -528,71 +911,202 @@
     async function predictDraw() { await doPredict(); }
 
     async function doPredict() {
-        const img = getDrawingImage();
-        try {
-            const res = await fetch('/api/predict', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({image: img})
-            });
-            const data = await res.json();
-            if (data.success) {
-                document.getElementById('pred-char').textContent = data.prediction;
-                document.getElementById('pred-conf').textContent = data.confidence + '%';
-                const top3El = document.getElementById('pred-top3');
-                top3El.innerHTML = '';
-                if (data.top3) {
-                    data.top3.forEach(item => {
-                        top3El.innerHTML += `
-                            <div class="top3-item">
-                                <span class="top3-label">${item.label}</span>
-                                <div class="top3-bar-bg"><div class="top3-bar" style="width:${item.confidence}%"></div></div>
-                                <span class="top3-pct">${item.confidence}%</span>
-                            </div>`;
-                    });
-                }
-                document.getElementById('prediction-card').classList.add('glow');
-                setTimeout(() => document.getElementById('prediction-card').classList.remove('glow'), 1500);
-            } else {
-                showToast(data.message || 'Train the model first!', 'error');
-            }
-        } catch(e) { showToast('Prediction failed!', 'error'); }
-    }
+        if (!tfModel) {
+            showToast('No trained model found. Train first!', 'error');
+            return;
+        }
 
-    async function loadStats() {
+        const pixels = getDrawingPixels(); // Float32Array of size 784
+        
+        let inputTensor = null;
+        let prediction = null;
         try {
-            const res = await fetch('/api/stats');
-            const data = await res.json();
-            document.getElementById('s-samples').textContent = data.total;
-            document.getElementById('s-classes').textContent = data.classes;
-            const c = document.getElementById('stats-container');
-            if (data.total === 0) { c.innerHTML = '<p class="empty-state">No samples yet.</p>'; return; }
-            c.innerHTML = '';
-            Object.entries(data.stats).sort((a,b) => b[1]-a[1]).forEach(([label, count]) => {
-                c.innerHTML += `
-                    <div class="stat-item">
-                        <span class="stat-label">${label}</span>
-                        <div class="stat-bar-bg"><div class="stat-bar" style="width:${Math.min(100,count*10)}%"></div></div>
-                        <span class="stat-count">${count}</span>
+            inputTensor = tf.tensor4d(pixels, [1, 28, 28, 1]);
+            prediction = tfModel.predict(inputTensor);
+            const probabilities = await prediction.data();
+
+            // Form list of classes with their confidence
+            const list = Array.from(probabilities).map((p, idx) => ({
+                label: reverseLabelMap[idx] || '?',
+                confidence: p * 100
+            }));
+
+            // Sort descending
+            list.sort((a, b) => b.confidence - a.confidence);
+
+            const best = list[0];
+            lastPrediction = best.label;
+
+            // Update UI elements
+            const predEl = document.getElementById('pred-char');
+            predEl.textContent = best.label;
+            predEl.style.animation = 'none';
+            predEl.offsetHeight; // reflow
+            predEl.style.animation = 'charAppear 0.5s ease-out';
+
+            document.getElementById('pred-conf').textContent = Math.round(best.confidence) + '%';
+
+            const top3El = document.getElementById('pred-top3');
+            top3El.innerHTML = '';
+            const k = Math.min(3, list.length);
+            for (let i = 0; i < k; i++) {
+                const item = list[i];
+                top3El.innerHTML += `
+                    <div class="top3-item">
+                        <span class="top3-label">${item.label}</span>
+                        <div class="top3-bar-bg"><div class="top3-bar" style="width:${item.confidence}%"></div></div>
+                        <span class="top3-pct">${Math.round(item.confidence)}%</span>
                     </div>`;
-            });
-        } catch(e) {}
+            }
+
+            const card = document.getElementById('prediction-card');
+            card.classList.add('glow');
+            setTimeout(() => card.classList.remove('glow'), 1500);
+
+        } catch (e) {
+            console.error("Prediction failed:", e);
+            showToast('Prediction failed! Try re-training the model.', 'error');
+        } finally {
+            if (inputTensor) inputTensor.dispose();
+            if (prediction) prediction.dispose();
+        }
     }
 
+    function loadStats() {
+        const stats = {};
+        for (const sample of samples) {
+            stats[sample.label] = (stats[sample.label] || 0) + 1;
+        }
+        
+        const total = samples.length;
+        const classesCount = Object.keys(stats).length;
+        
+        document.getElementById('s-samples').textContent = total;
+        document.getElementById('s-classes').textContent = classesCount;
+        
+        const modelEl = document.getElementById('s-model');
+        if (tfModel) {
+            modelEl.textContent = "Ready (TFJS)";
+            modelEl.classList.add('model-ready');
+        } else {
+            modelEl.textContent = "Not Trained";
+            modelEl.classList.remove('model-ready');
+        }
+        
+        // Device
+        try {
+            const backend = tf.getBackend(); // 'webgl' or 'wasm' or 'cpu'
+            document.getElementById('s-device').textContent = backend.toUpperCase();
+            if (backend === 'webgl') {
+                document.getElementById('s-device').style.color = 'var(--success)';
+                document.getElementById('s-device').style.textShadow = '0 0 8px var(--success-glow)';
+            } else {
+                document.getElementById('s-device').style.color = '';
+                document.getElementById('s-device').style.textShadow = '';
+            }
+        } catch(e) {
+            document.getElementById('s-device').textContent = 'CPU';
+        }
+        
+        const c = document.getElementById('stats-container');
+        if (total === 0) {
+            c.innerHTML = '<p class="empty-state">No samples collected yet. Start drawing!</p>';
+            return;
+        }
+        
+        c.innerHTML = '';
+        const sorted = Object.entries(stats).sort((a,b) => b[1]-a[1]);
+        sorted.forEach(([label, count], idx) => {
+            const maxCount = sorted[0][1];
+            const width = Math.max(5, (count / maxCount) * 100);
+            c.innerHTML += `
+                <div class="stat-item" style="animation-delay: ${idx * 0.05}s">
+                    <span class="stat-label">${label}</span>
+                    <div class="stat-bar-bg"><div class="stat-bar" style="width:${width}%"></div></div>
+                    <span class="stat-count">${count}</span>
+                </div>`;
+        });
+    }
+
+    async function initML() {
+        // Load dataset from backend (comes from Git/Disk training_data)
+        try {
+            const res = await fetch('/api/load_dataset');
+            const data = await res.json();
+            if (data.samples && data.samples.length > 0) {
+                // Map the normalized pixels list back to Float32Array
+                const serverSamples = data.samples.map(s => ({
+                    label: s.label,
+                    pixels: new Float32Array(s.pixels)
+                }));
+                samples = [...serverSamples];
+            }
+        } catch(e) {
+            console.warn("Could not load backend dataset, starting empty:", e);
+        }
+
+        // Load local samples from localStorage
+        try {
+            const raw = localStorage.getItem('air_writing_local_samples');
+            if (raw) {
+                const localSamples = JSON.parse(raw).map(s => ({
+                    label: s.label,
+                    pixels: new Float32Array(s.pixels)
+                }));
+                // Merge
+                samples = [...samples, ...localSamples];
+            }
+        } catch(e) {
+            console.error("Failed to load local samples:", e);
+        }
+
+        rebuildLabelMaps();
+        loadStats();
+
+        // Load model
+        try {
+            tfModel = await tf.loadLayersModel(MODEL_STORAGE_KEY);
+            tfModel.compile({
+                optimizer: tf.train.adam(0.005),
+                loss: 'categoricalCrossentropy',
+                metrics: ['accuracy']
+            });
+            console.log("Loaded existing model from LocalStorage.");
+            loadStats(); // Re-run to update model ready text
+        } catch(e) {
+            console.log("No saved model found in LocalStorage.");
+        }
+    }
+
+    // ============================================================
+    // TOAST NOTIFICATIONS
+    // ============================================================
     function showToast(msg, type='info') {
         const t = document.getElementById('toast');
         t.textContent = msg;
         t.className = 'toast show ' + type;
-        setTimeout(() => t.className = 'toast', 3000);
+        setTimeout(() => t.className = 'toast', 3500);
     }
 
+    // ============================================================
+    // KEYBOARD SHORTCUTS
+    // ============================================================
     document.addEventListener('keydown', (e) => {
         if (e.target.tagName === 'INPUT') return;
         if (e.key === 'c') clearCanvas();
         if (e.key === 'z' && e.ctrlKey) undoStroke();
+        if (e.key === '1') switchMode('train');
+        if (e.key === '2') switchMode('predict');
+        if (e.key === '3') switchMode('draw');
+        if (e.key === 'Enter') {
+            if (currentMode === 'predict') doPredict();
+            if (currentMode === 'draw') doPredict();
+        }
     });
 
-    loadStats();
+    // Run ML Initialization
+    initML();
+
     </script>
 </body>
 </html>
